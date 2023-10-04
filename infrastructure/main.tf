@@ -21,7 +21,7 @@ resource "azurerm_resource_group" "resource_group" {
 }
 
 resource "azurerm_storage_account" "storage" {
-  name                      = "${var.environment}agdstorage41223"
+  name                      = "${var.environment}stor41223"
   resource_group_name       = azurerm_resource_group.resource_group.name
   location                  = azurerm_resource_group.resource_group.location
   account_tier              = "Standard"
