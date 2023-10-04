@@ -208,7 +208,7 @@ jobs:
     
     - name: Build Backend Application
       run: |
-        pushd './backend/FunctionApp' backend\FunctionApp
+        pushd './backend/FunctionApp'
         dotnet build --configuration Release --output ./build
         popd
 
