@@ -212,6 +212,9 @@ jobs:
         dotnet build --configuration Release --output ./build
         popd
 
+    - name: List Directory Content
+      run: ls -la ./backend/FunctionApp/build
+
     - name: Publish Backend Application
       uses: Azure/functions-action@v1
       with:
