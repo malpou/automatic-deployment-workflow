@@ -50,6 +50,7 @@ jobs:
 
   terraform-plan:
     name: 'Terraform Plan'
+    permissions: write-all
     needs: [check-changes, set-enviroment]
     if: (needs.check-changes.outputs.infrastructure_changed == 'true')
     runs-on: ubuntu-latest
