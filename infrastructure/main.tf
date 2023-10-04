@@ -6,7 +6,7 @@ terraform {
     }
     github = {
       source  = "integrations/github"
-      version = "4.5.2"
+      version = "~> 5.0"
     }
   }
 }
@@ -99,5 +99,3 @@ resource "github_actions_secret" "update_site_api_key_secret" {
   secret_name     = "${var.environment}_api_key"
   plaintext_value = azurerm_static_site.static_site.api_key
 }
-
-#
