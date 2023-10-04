@@ -218,7 +218,7 @@ jobs:
     - name: Publish Backend Application
       uses: Azure/functions-action@v1
       with:
-        app-name: ${{ needs.set-enviroment.outputs.environment == 'production' && secrets.PRODUCTION_FUNCTION_APP_NAME || secrets.STAGING_FUNCTION_APP_NAME }}
+        app-name: ${{ needs.set-enviroment.outputs.environment}}-agd-function-app
         package: '/backend/FunctionApp/build'
 
   deploy-frontend:
