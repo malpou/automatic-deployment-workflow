@@ -50,6 +50,7 @@ jobs:
 
   terraform-plan:
     name: 'Terraform Plan'
+    permissions: write-all
     needs: [check-changes, set-enviroment]
     if: (needs.check-changes.outputs.infrastructure_changed == 'true')
     runs-on: ubuntu-latest
@@ -88,7 +89,7 @@ jobs:
       run: |
         cd infrastructure
         export exitcode=0
-        terraform plan -var="environment=${{ needs.set-enviroment.outputs.environment }}" -var="github_token=${{ secrets.GITHUB_TOKEN }}" -detailed-exitcode -no-color -out tfplan || export exitcode=$?
+        terraform plan -var="environment=${{ needs.set-enviroment.outputs.environment }}" -var="github_token=${{ secrets.PAT }}" -detailed-exitcode -no-color -out tfplan || export exitcode=$?
 
         echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
         
@@ -214,8 +215,8 @@ jobs:
     - name: Publish Backend Application
       uses: Azure/functions-action@v1
       with:
-        app-name: ${{ needs.set-enviroment.outputs.environment == 'production' && secrets.production-function-app-name || secrets.staging-function-app-name }}
-        package: '/backend/FunctionApp/build'
+        app-name: ${{ needs.set-enviroment.outputs.environment }}-agd-function-app
+        package: 'backend/FunctionApp/build'
 
   deploy-frontend:
     name: 'Deploy Frontend'
@@ -239,7 +240,7 @@ jobs:
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ needs.set-enviroment.outputs.environment == 'production' && secrets.production-api-key || secrets.staging-api-key }}
+          azure_static_web_apps_api_token: ${{ needs.set-enviroment.outputs.environment == 'production' && secrets.PRODUCTION_API_KEY || secrets.STAGING_API_KEY }}
           repo_token: ${{ secrets.GITHUB_TOKEN }} 
           action: "upload"
           app_location: "/frontend"

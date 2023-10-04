@@ -6,13 +6,17 @@ terraform {
     }
     github = {
       source  = "integrations/github"
-      version = "4.5.2"
+      version = "~> 5.0"
     }
   }
 }
 
 provider "azurerm" {
   features {}
+}
+
+provider "github" {
+  token = var.github_token
 }
 
 resource "azurerm_resource_group" "resource_group" {
@@ -82,12 +86,6 @@ resource "azurerm_static_site" "static_site" {
   location            = "westeurope"
   sku_tier            = "Free"
   sku_size            = "Free"
-}
-
-resource "github_actions_secret" "update_function_app_name_secret" {
-  repository      = "automatic-deployment-workflow"
-  secret_name     = "${var.environment}_function_app_name"
-  plaintext_value = azurerm_linux_function_app.function_app.name
 }
 
 resource "github_actions_secret" "update_site_api_key_secret" {
