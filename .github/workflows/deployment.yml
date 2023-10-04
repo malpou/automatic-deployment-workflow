@@ -214,7 +214,7 @@ jobs:
     - name: Publish Backend Application
       uses: Azure/functions-action@v1
       with:
-        app-name: ${{ needs.set-enviroment.outputs.environment == 'production' && secrets.production-function-app-name || secrets.staging-function-app-name }}
+        app-name: ${{ needs.set-enviroment.outputs.environment == 'production' && secrets.production_function_app_name || secrets.staging_function_app_name }}
         package: '/backend/FunctionApp/build'
 
   deploy-frontend:
@@ -239,7 +239,7 @@ jobs:
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ needs.set-enviroment.outputs.environment == 'production' && secrets.production-api-key || secrets.staging-api-key }}
+          azure_static_web_apps_api_token: ${{ needs.set-enviroment.outputs.environment == 'production' && secrets.production_api_key || secrets.staging_api_key }}
           repo_token: ${{ secrets.GITHUB_TOKEN }} 
           action: "upload"
           app_location: "/frontend"
