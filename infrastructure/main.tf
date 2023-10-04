@@ -15,6 +15,10 @@ provider "azurerm" {
   features {}
 }
 
+provider "github" {
+  token = var.github_token
+}
+
 resource "azurerm_resource_group" "resource_group" {
   name     = "${var.environment}-${var.resource_group_name}"
   location = var.location
