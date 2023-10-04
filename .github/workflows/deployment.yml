@@ -1,0 +1,247 @@
+name: 'Deploy Infrastructure & Application'
+
+on:
+  push:
+    branches:
+      - main
+      - development
+  pull_request:
+    branches:
+      - main
+      - development
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  DOTNET_VERSION: '7.0.x'
+  ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
+  ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+  ARM_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+  ARM_CLIENT_SECRET: "${{ secrets.AZURE_CLIENT_SECRET }}"
+
+jobs:
+  check-changes:
+    name: Check changes in paths
+    runs-on: ubuntu-latest
+    outputs:
+        backend_changed: ${{ steps.check-changes.outputs.backend_changed }}
+        frontend_changed: ${{ steps.check-changes.outputs.frontend_changed }}
+        infrastructure_changed: ${{ steps.check-changes.outputs.infrastructure_changed }}
+
+    steps:
+      - name: Check changes in paths
+        id: check-changes
+        uses: malpou/automatic-deployment-workflow/.github/actions/check-changes@main
+
+  set-enviroment: 
+    name: Set enviroment
+    needs: check-changes
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+
+    steps:
+      - name: Set enviroment
+        id: set-env
+        uses: malpou/automatic-deployment-workflow/.github/actions/set-enviroment@main
+
+  terraform-plan:
+    name: 'Terraform Plan'
+    needs: [check-changes, set-enviroment]
+    if: (needs.check-changes.outputs.infrastructure_changed == 'true')
+    runs-on: ubuntu-latest
+    env:
+      ARM_SKIP_PROVIDER_REGISTRATION: true
+    outputs:
+      tfplanExitCode: ${{ steps.tf-plan.outputs.exitcode }}
+
+    steps:
+
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_wrapper: false
+
+    - name: Configure Backend for Environment
+      run: |
+        cd infrastructure
+        cp backend-${{ needs.set-enviroment.outputs.environment }}.tf-ignore backend.tf
+
+    - name: Terraform Init
+      run: |
+        cd infrastructure
+        terraform init
+
+    - name: Terraform Format
+      run: |
+        cd infrastructure
+        terraform fmt -check
+
+    - name: Terraform Plan
+      id: tf-plan
+      run: |
+        cd infrastructure
+        export exitcode=0
+        terraform plan -var="environment=${{ needs.set-enviroment.outputs.environment }}" -var="github_token=${{ secrets.GITHUB_TOKEN }}" -detailed-exitcode -no-color -out tfplan || export exitcode=$?
+
+        echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+        
+        if [ $exitcode -eq 1 ]; then
+          echo Terraform Plan Failed!
+          exit 1
+        else 
+          exit 0
+        fi
+        
+    - name: Publish Terraform Plan
+      uses: actions/upload-artifact@v3
+      with:
+        name: tfplan
+        path: ./infrastructure/tfplan
+        
+    - name: Create String Output
+      id: tf-plan-string
+      run: |
+        cd infrastructure
+        TERRAFORM_PLAN=$(terraform show -no-color tfplan)
+        
+        delimiter="$(openssl rand -hex 8)"
+        echo "summary<<${delimiter}" >> $GITHUB_OUTPUT
+        echo "## Terraform Plan Output" >> $GITHUB_OUTPUT
+        echo "<details><summary>Click to expand</summary>" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo '```terraform' >> $GITHUB_OUTPUT
+        echo "$TERRAFORM_PLAN" >> $GITHUB_OUTPUT
+        echo '```' >> $GITHUB_OUTPUT
+        echo "</details>" >> $GITHUB_OUTPUT
+        echo "${delimiter}" >> $GITHUB_OUTPUT
+        
+    - name: Publish Terraform Plan to Task Summary
+      env:
+        SUMMARY: ${{ steps.tf-plan-string.outputs.summary }}
+      run: |
+        echo "$SUMMARY" >> $GITHUB_STEP_SUMMARY
+      
+    - name: Push Terraform Output to PR
+      if: github.event_name == 'pull_request' && github.ref != 'refs/heads/main'
+      uses: actions/github-script@v6
+      env:
+        SUMMARY: "${{ steps.tf-plan-string.outputs.summary }}"
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const body = `${process.env.SUMMARY}`;
+          github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+          })
+
+  terraform-apply:
+    name: 'Terraform Apply'
+    if: |
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development') && 
+      needs.terraform-plan.outputs.tfplanExitCode == '2'
+    runs-on: ubuntu-latest
+    needs: [terraform-plan, set-enviroment]
+    environment: 
+      name: ${{ needs.set-enviroment.outputs.environment }}
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+
+    - name: Terraform Init
+      run: |
+        cd infrastructure
+        terraform init -backend-config="container_name=tfstate-${{ needs.set-enviroment.outputs.environment }}" \
+          -backend-config="key=${{ needs.set-enviroment.outputs.environment }}.terraform.tfstate" \
+
+    - name: Download Terraform Plan
+      uses: actions/download-artifact@v3
+      with:
+        name: tfplan
+        path: ./infrastructure
+
+    - name: Terraform Apply
+      run: |
+        cd infrastructure
+        terraform apply -auto-approve tfplan
+
+  deploy-backend:
+    name: 'Deploy Backend'
+    needs: [set-enviroment, check-changes, terraform-apply]
+    if: |
+      ((github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development') &&
+      needs.terraform-apply.result == 'success') ||
+      (always() && (needs.terraform-apply.result == 'success' || needs.terraform-apply.result == 'skipped') &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development') && 
+      needs.check-changes.outputs.backend_changed == 'true')
+    runs-on: ubuntu-latest
+    environment: 
+      name: ${{ needs.set-enviroment.outputs.environment }}
+      
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Setup DotNet ${{ env.DOTNET_VERSION }} Environment
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: Build Backend Application
+      run: |
+        pushd './backend/FunctionApp'
+        dotnet build --configuration Release --output ./build
+        popd
+
+    - name: Publish Backend Application
+      uses: Azure/functions-action@v1
+      with:
+        app-name: ${{ needs.set-enviroment.outputs.environment == 'production' && secrets.production-function-app-name || secrets.staging-function-app-name }}
+        package: '/backend/FunctionApp/build'
+
+  deploy-frontend:
+    name: 'Deploy Frontend'
+    needs: [set-enviroment, check-changes, terraform-apply]
+    if: |
+      ((github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development') &&
+      needs.terraform-apply.result == 'success') ||
+      (always() && (needs.terraform-apply.result == 'success' || needs.terraform-apply.result == 'skipped') &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development') && 
+      needs.check-changes.outputs.frontend_changed == 'true')
+    runs-on: ubuntu-latest
+    environment: 
+      name: ${{ needs.set-enviroment.outputs.environment }}
+      
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Build And Deploy
+        id: builddeploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ needs.set-enviroment.outputs.environment == 'production' && secrets.production-api-key || secrets.staging-api-key }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }} 
+          action: "upload"
+          app_location: "/frontend"
+          api_location: ""
+          output_location: "dist" 

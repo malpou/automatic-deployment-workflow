@@ -1,0 +1,37 @@
+name: 'Check Changes'
+description: 'Check if there are changes in specific directories'
+
+outputs:
+  backend_changed:
+    description: 'Is backend changed?'
+    value: ${{ steps.changes.outputs.backend_changed }}
+  frontend_changed:
+    description: 'Is frontend changed?'
+    value: ${{ steps.changes.outputs.frontend_changed }}
+  infrastructure_changed:
+    description: 'Is infrastructure changed?'
+    value: ${{ steps.changes.outputs.infrastructure_changed }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with: 
+        fetch-depth: 2
+
+    - name: Check for changes
+      id: changes
+      run: |
+        backend_changed=false
+        frontend_changed=false
+        infrastructure_changed=false
+
+        git diff --quiet HEAD^ HEAD backend/ || backend_changed=true
+        git diff --quiet HEAD^ HEAD frontend/ || frontend_changed=true
+        git diff --quiet HEAD^ HEAD infrastructure/ || infrastructure_changed=true
+
+        echo "backend_changed=$backend_changed" >> $GITHUB_OUTPUT
+        echo "frontend_changed=$frontend_changed" >> $GITHUB_OUTPUT
+        echo "infrastructure_changed=$infrastructure_changed" >> $GITHUB_OUTPUT
+      shell: bash

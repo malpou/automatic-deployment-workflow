@@ -1,0 +1,30 @@
+name: 'Set Environment'
+description: 'Figure out which enviroment to deploy to'
+
+outputs:
+  enviroment:
+    description: 'Enviroment to deploy to'
+    value: ${{ steps.enviroment.outputs.enviroment }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set Enviroment
+      id: enviroment
+      run: |
+        BRANCH_NAME=""
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          BRANCH_NAME=${{ github.base_ref }}
+        else
+          BRANCH_NAME=${{ github.ref }}
+        fi
+                
+        if [[ "$BRANCH_NAME" == "main" || "$BRANCH_NAME" == "refs/heads/main" ]]; then
+          echo "enviroment=production" >> $GITHUB_OUTPUT
+        elif [[ "$BRANCH_NAME" == "development" || "$BRANCH_NAME" == "refs/heads/development" ]]; then
+          echo "enviroment=staging" >> $GITHUB_OUTPUT
+        else 
+          echo "Unknown branch name: $BRANCH_NAME"
+          exit 1
+        fi
+      shell: bash
