@@ -38,7 +38,6 @@ jobs:
 
   set-enviroment: 
     name: Set enviroment
-    needs: check-changes
     runs-on: ubuntu-latest
     outputs:
       environment: ${{ steps.set-env.outputs.enviroment }}
