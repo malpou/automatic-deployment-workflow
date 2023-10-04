@@ -89,7 +89,7 @@ jobs:
       run: |
         cd infrastructure
         export exitcode=0
-        terraform plan -var="environment=${{ needs.set-enviroment.outputs.environment }}" -var="github_token=${{ secrets.GITHUB_TOKEN }}" -detailed-exitcode -no-color -out tfplan || export exitcode=$?
+        terraform plan -var="environment=${{ needs.set-enviroment.outputs.environment }}" -var="github_token=${{ secrets.PAT }}" -detailed-exitcode -no-color -out tfplan || export exitcode=$?
 
         echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
         
