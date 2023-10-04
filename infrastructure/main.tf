@@ -100,5 +100,3 @@ resource "github_actions_secret" "update_site_api_key_secret" {
   plaintext_value = azurerm_static_site.static_site.api_key
 }
 
-
-# trigger 
